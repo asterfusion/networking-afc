@@ -158,6 +158,7 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
         switch_infos = CONF.ml2_aster.cx_switches
         LOG.info("Server and cx switch connect infos >>> %s", switch_infos)
 
+        # Sort by switch_ip
         return [(k, v) for k, v in switch_infos.items()]
 
         #
@@ -215,12 +216,16 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
         # Check that both segments are valid
         if not self._is_valid_segment(vxlan_segment=vxlan_segment, vlan_segment=vlan_segment):
             return
+        network_id = port.get("network_id")
+        subnet_detail = utils.get_subnet_detail_by_network_id(network_id=network_id)
+        if not subnet_detail:
+            return
+        subnet_id = subnet_detail.get("subnet_id")
 
         host_id = port.get(portbindings.HOST_ID)
         l2_vni = vxlan_segment.get(api.SEGMENTATION_ID)
         vlan_id = vlan_segment.get(api.SEGMENTATION_ID)
         physical_network = vlan_segment.get(api.PHYSICAL_NETWORK)
-        subnet_id = port.get("fixed_ips")[0].get("subnet_id")
 
         # Get host connection physical switch infos
         host_connections = self._get_port_connections(port, host_id)
@@ -274,6 +279,8 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
 
                 config_params = {
                     "switch_ip": switch_ip,
+                    "project_id": port.get("project_id"),
+                    "network_id": network_id,
                     "vni": l2_vni,
                     "vlan_id": vlan_id,
                     "interfaces": interface_names,
@@ -296,7 +303,7 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                         "vlan_id": vlan_id
                     })
                     LOG.info("Add the VRF configuration on the [%s], params >>> \n %s \n",
-                                 switch_ip, json.dumps(add_vrf_params, indent=3))
+                             switch_ip, json.dumps(add_vrf_params, indent=3))
 
                     # Add the VRF configuration on specified physical switch
                     # TODO config exception handing
@@ -368,7 +375,6 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                     })
                     try:
                         # Clean the VRF configuration on specified physical switch
-                        # TODO config exception handing
                         delete_interface_from_router(del_vrf_params=del_vrf_params)
                         LOG.info("Remove the VRF configuration on the [%s], params >>> \n %s \n",
                                  switch_ip, json.dumps(del_vrf_params, indent=3))
@@ -379,20 +385,20 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
 
                 delete_params = {
                     "switch_ip": switch_ip,
+                    "project_id": port.get("project_id"),
+                    "network_id": port.get("network_id"),
                     "vni": l2_vni,
                     "vlan_id": vlan_id,
                     "interfaces": interface_names,
                     "gw_ip": l2_gw_ip
                 }
                 try:
-                    # TODO config exception handing
                     self.afc_api.delete_config_from_afc(delete_params)
                     LOG.info("Delete configuration succeeded on [%s] Aster Switch, config_params >>> \n %s \n",
                              switch_ip, json.dumps(delete_params, indent=3))
                 except Exception as ex:
                     LOG.error("Delete configuration failed on [%s] Aster Switch, config_params >>> \n %s \n,"
-                              "Exception = %s",
-                             switch_ip, json.dumps(delete_params, indent=3), ex)
+                              "Exception = %s", switch_ip, json.dumps(delete_params, indent=3), ex)
 
                 session = lib_db_api.get_writer_session()
                 session.query(aster_models_v2.AsterPortBinding). \
@@ -525,4 +531,3 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                            'seg': segment[api.SEGMENTATION_ID],
                            'physical_network': segment[api.PHYSICAL_NETWORK],
                            'net_type': segment[api.NETWORK_TYPE]})
-
