@@ -92,106 +92,24 @@ opt_ml2_mech_aster_cx_dict = cfg.DictOpt(
 )
 cfg.CONF.register_opt(opt_ml2_mech_aster_cx_dict, "ml2_aster")
 
-# cfg.CONF.ml2_cisco.nexus_switches
 
-# nexus_switches = base.SubsectionOpt(
-#     'ml2_mech_cisco_nexus',
-#     dest='nexus_switches',
-#     help=_("Subgroups that allow you to specify the nexus switches to be "
-#            "managed by the nexus ML2 driver."),
-#     subopts=nexus_sub_opts)
-#
-# print "333333333333333333333"
-# print nexus_switches
-# print "333333333333333333333"
-#
-# # cfg.CONF.register_opts(nexus_sub_opts, "ml2_mech_cisco_nexus:<ip_address>")
-#
-# cfg.CONF.register_opts(ml2_cisco_opts, "ml2_cisco")
-# cfg.CONF.register_opt(nexus_switches, "ml2_cisco")
-#
-# cfg.DictOpt('jobtitles', default=None, help=('A dictionary of usernames titles'), dest=nexus_switches)
-#
-# cfg.CONF.register_opt(dest:)
-#
-# # cfg.CONF.ml2_cisco.nexus_switches
-#
-# t = SubsectionOpt("switch", dest="switches", subopts=[StrOpt('address'), StrOpt('password')])
+border_leaf_sub_opts = [
+    cfg.ListOpt('vlan_ranges',
+                default=[],
+                help=_("Comma-separated list of <vni_min>:<vni_max> tuples "
+                       "enumerating ranges of VXLAN Network IDs that are "
+                       "available for tenant network allocation. "
+                       "Example format: vlan_ranges = 100:1000,2000:6000")),
+    cfg.Opt('physical_network_ports_mapping', default={}, sample_default='<None>',
+            type=types.Dict(value_type=types.List(bounds=True)),
+            help=_('A list of key:value pairs'))
+]
 
-
-#
-
-# Format for ml2_conf_cisco.ini 'ml2_mech_cisco_nexus' is:
-# {('<device ipaddr>', '<keyword>'): '<value>', ...}
-#
-# Example:
-# {('1.1.1.1', 'username'): 'admin',
-#  ('1.1.1.1', 'password'): 'mySecretPassword',
-#  ('1.1.1.1', 'compute1'): '1/1', ...}
-#
-
-
-# import sys
-#
-# from oslo_config import cfg
-#
-# from neutron.plugins.ml2.drivers.mech_aster.mech_driver import config as conf
-#
-#
-# cfg.CONF(sys.argv[1:])
-#
-# print cfg.CONF.aster_authtoken.auth_uri
-# # print(cfg.CONF.API.host)
-# # print(cfg.CONF.API.bind_port)
-# # print(cfg.CONF.API.ssl)
-#
-#
-# identities = {}
-# sections = cfg.CONF.list_all_sections()
-#
-# for section in sections:
-#     subsection, sep, ident = section.partition(':')
-#
-#     print subsection
-#     print sep
-#     print ident
-#
-#     if subsection.lower() != self.name.lower():
-#         continue
-#     cfg.CONF.register_opts(self.subopts, group=section)
-#
-#     sub_dict = {}
-#     for key, value in cfg.CONF.get(section).items():
-#         sub_dict.update({
-#             key: value
-#         })
-#
-#     identities[ident] = sub_dict
-#     # identities[ident] = cfg.CONF.get(section)
-# if getattr(cfg.CONF, 'get_location', None):
-#     return (identities, None)
-# else:
-#     return identities
-
-# {'nexus_switches': {'1.1.1.1': {'physnet': 'physnet1', 'host_ports_mapping': {'compute1': ['1/1'], 'compute2': ['1/2'], 'compute5': ['1/3', '1/4']}}, '2.2.2.2': {'physnet': 'physnet1', 'host_ports_mapping': {'compute1': ['1/1'], 'compute2': ['1/2'],'compute5': ['1/3', '1/4']}}}}
-
-# cfg.CONF.ml2_cisco.nexus_switches
-
-
-# neutron = client.Client(auth_strategy="noauth", endpoint_url="http://192.168.4.169:9696")
-# return neutron
-#
-# # username = "admin"
-# # password = "stack123"
-# # project_name = "demo"
-# # project_domain_id = "default"
-# # user_domain_id = "default"
-# # auth_url = "http://127.0.0.1/identity"
-# # auth = identity.Password(auth_url=auth_url,
-# #                          username=username,
-# #                          password=password,
-# #                          project_name=project_name,
-# #                          project_domain_id=project_domain_id,
-# #                          user_domain_id=user_domain_id)
-# # sess = session.Session(auth=auth)
-# # neutron = client.Client(session=sess)
+_identities = get_sub_section_dict(name="ml2_border_leaf", sub_opts=border_leaf_sub_opts)
+opt_ml2_border_dict = cfg.DictOpt(
+    'ml2_border_leaf',
+    default=_identities,
+    help=_('A dictionary of ml2_border_leaf titles'),
+    dest="border_switches"
+)
+cfg.CONF.register_opt(opt_ml2_border_dict, "ml2_aster")
