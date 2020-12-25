@@ -26,10 +26,11 @@ class BorderVlanManager(object):
             vlan_ranges = []
             for border_switch_ip,  border_switch in border_switches.items():
                 vlan_ranges.append(
-                    "{}:{}".format(border_switch_ip, border_switch.get("vlan_ranges")[0])
+                    "{}:{}".format(border_switch_ip,
+                                   border_switch.get("vlan_ranges")[0])
                 )
-            self.border_leaf_vlan_ranges = plugin_utils.parse_network_vlan_ranges(
-                vlan_ranges)
+            self.border_leaf_vlan_ranges = plugin_utils.\
+                parse_network_vlan_ranges(vlan_ranges)
         except Exception as ex:
             LOG.exception("Failed to parse border_leaf_vlan_ranges. ex: %s "
                           "Service terminated!", ex)
@@ -41,14 +42,16 @@ class BorderVlanManager(object):
         with writer_ctx_manager:
             # get existing allocations for all physical networks
             allocations = dict()
-            allocs = session.query(aster_models_v2.AsterLeafVlanAllocation).all()
+            allocs = session.\
+                query(aster_models_v2.AsterLeafVlanAllocation).all()
             for alloc in allocs:
                 if alloc.switch_ip not in allocations:
                     allocations[alloc.switch_ip] = list()
                 allocations[alloc.switch_ip].append(alloc)
 
             # process vlan ranges for each configured border leaf
-            for (switch_ip, vlan_ranges) in self.border_leaf_vlan_ranges.items():
+            for (switch_ip, vlan_ranges) in \
+                    self.border_leaf_vlan_ranges.items():
                 # determine current configured allocatable vlans for
                 # this border leaf
                 vlan_ids = set()
@@ -66,18 +69,23 @@ class BorderVlanManager(object):
                             # it's not allocatable, so check if its allocated
                             if not alloc.router_id:
                                 # it's not, so remove it from table
-                                LOG.debug("Removing vlan %(vlan_id)s on border switch_ip %(switch_ip)s from pool",
-                                          {'vlan_id': alloc.vlan_id, 'switch_ip': switch_ip})
+                                LOG.debug("Removing vlan %(vlan_id)s on "
+                                          "border switch_ip %(switch_ip)s"
+                                          "from pool",
+                                          {'vlan_id': alloc.vlan_id,
+                                           'switch_ip': switch_ip})
                                 # This UPDATE WHERE statement blocks anyone
                                 # from concurrently changing the allocation
                                 # values to True while our transaction is
                                 # open so we don't accidentally delete
                                 # allocated segments. If someone has already
-                                # allocated, update_objects will return 0 so we
-                                # don't delete.
-                                session.query(aster_models_v2.AsterLeafVlanAllocation).\
-                                    filter_by(switch_ip=switch_ip, vlan_id=alloc.vlan_id, router_id="").\
-                                    delete()
+                                # allocated, update_objects will return 0 so
+                                # we don't delete.
+                                session.query(
+                                    aster_models_v2.AsterLeafVlanAllocation).\
+                                    filter_by(switch_ip=switch_ip,
+                                              vlan_id=alloc.vlan_id,
+                                              router_id="").delete()
                                 session.flush()
                     del allocations[switch_ip]
 
@@ -95,11 +103,13 @@ class BorderVlanManager(object):
             for allocs in allocations.values():
                 for alloc in allocs:
                     if not alloc.router_id:
-                        LOG.debug("Removing vlan %(vlan_id)s on border leaf switch_ip "
+                        LOG.debug("Removing vlan %(vlan_id)s on "
+                                  "border leaf switch_ip "
                                   " %(switch_ip)s from pool",
                                   {'vlan_id': alloc.vlan_id,
                                    'switch_ip': alloc.switch_ip})
-                        session.query(aster_models_v2.AsterLeafVlanAllocation).\
+                        session.query(
+                            aster_models_v2.AsterLeafVlanAllocation).\
                             filter_by(switch_ip=alloc.switch_ip,
                                       vlan_id=alloc.vlan_id,
                                       router_id=alloc.router_id).delete()
@@ -108,7 +118,8 @@ class BorderVlanManager(object):
         session, ctx_manager = utils.get_writer_session()
         try:
             with ctx_manager:
-                allocations = session.query(aster_models_v2.AsterLeafVlanAllocation).\
+                allocations = session.\
+                    query(aster_models_v2.AsterLeafVlanAllocation).\
                     filter_by(switch_ip=leaf_ip, router_id="").all()
                 if not allocations:
                     # No resource available
@@ -120,7 +131,7 @@ class BorderVlanManager(object):
                 session.flush()
         except db_exc.DBDuplicateEntry as ex:
             # Segment already allocated (insert failure)
-            raise  ex
+            raise ex
 
     def release_segment(self, leaf_ip=None, router_id=None):
         ranges = self.border_leaf_vlan_ranges.get(leaf_ip, [])
@@ -130,11 +141,11 @@ class BorderVlanManager(object):
 
         session, ctx_manager = utils.get_writer_session()
         with ctx_manager:
-            alloc = session.query(aster_models_v2.AsterLeafVlanAllocation). \
+            alloc = session.query(aster_models_v2.AsterLeafVlanAllocation).\
                 filter_by(switch_ip=leaf_ip, router_id=router_id).first()
             if alloc and alloc.vlan_id in vlan_ids:
                 alloc.router_id = ""
             else:
-                session.query(aster_models_v2.AsterLeafVlanAllocation). \
+                session.query(aster_models_v2.AsterLeafVlanAllocation).\
                     filter_by(switch_ip=leaf_ip, router_id=router_id).delete()
             session.flush()

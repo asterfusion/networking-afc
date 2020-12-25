@@ -32,9 +32,11 @@ from neutron_lib.db import api as lib_db_api
 from networking_afc.common import api as afc_api
 from networking_afc.common import utils
 from networking_afc.db.models import aster_models_v2
-from networking_afc.ml2_drivers.mech_aster.mech_driver import exceptions as exc
+from networking_afc.ml2_drivers.mech_aster.mech_driver import (
+    exceptions as exc)
 from networking_afc.l3_router.afc_l3_driver import add_interface_to_router
-from networking_afc.l3_router.afc_l3_driver import delete_interface_from_router
+from networking_afc.l3_router.afc_l3_driver import (
+    delete_interface_from_router)
 
 
 LOG = log.getLogger(__name__)
@@ -53,9 +55,10 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
     def initialize(self):
         self.context = neutron_context.Context()
         self._ppid = os.getpid()
-        LOG.info("AsterCXSwitchMechanismDriver: initialize() called pid %(pid)d thid %(tid)d",
-                 {'pid': self._ppid, 'tid': threading.current_thread().ident}
-                 )
+        LOG.debug("AsterCXSwitchMechanismDriver: initialize() "
+                  "called pid %(pid)d thid %(tid)d",
+                  {'pid': self._ppid, 'tid': threading.current_thread().ident}
+                  )
 
     @staticmethod
     def _is_segment_aster_vxlan(segment):
@@ -72,11 +75,11 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
 
     def create_network_precommit(self, context):
         network = context.current
-        LOG.info("create_network_precommit >>>> %s", network)
+        LOG.debug("create_network_precommit: %s", network)
 
     def delete_network_postcommit(self, context):
         network = context.current
-        LOG.info("delete_network_postcommit >>>> %s", network)
+        LOG.debug("delete_network_postcommit: %s", network)
 
     def create_subnet_precommit(self, context):
         # Limit a network to only one subnet
@@ -100,9 +103,11 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
         # retries for new VMs will stop.  Subnet
         # transactions will continue to be retried.
         network = context.current
-        LOG.info("create_port_postcommit >>>> %s", network)
-        LOG.info("create_port_postcommit top_bound_segment >>>> %s", context.top_bound_segment)
-        LOG.info("create_port_postcommit bottom_bound_segment >>>> %s", context.bottom_bound_segment)
+        LOG.debug("create_port_postcommit: %s", network)
+        LOG.debug("create_port_postcommit top_bound_segment: %s",
+                  context.top_bound_segment)
+        LOG.debug("create_port_postcommit bottom_bound_segment: %s",
+                  context.bottom_bound_segment)
 
     @staticmethod
     def _is_vm_migrating(context, vlan_segment, orig_vlan_segment):
@@ -117,11 +122,13 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
     def _is_status_down(port):
         # ACTIVE, BUILD status indicates a port is up or coming up.
         # DOWN, ERROR status indicates the port is down.
-        return port['status'] in [constants.PORT_STATUS_DOWN, constants.PORT_STATUS_ERROR]
+        return port['status'] in [constants.PORT_STATUS_DOWN,
+                                  constants.PORT_STATUS_ERROR]
 
     @staticmethod
     def _is_valid_segment(vxlan_segment=None, vlan_segment=None):
-        return False if vxlan_segment is None or vlan_segment is None else True
+        return False if (vxlan_segment is None or
+                         vlan_segment is None) else True
 
     @staticmethod
     def _is_supported_device_owner(port):
@@ -156,12 +163,7 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
     @staticmethod
     def _get_server_connect_switch_infos():
         switch_infos = CONF.ml2_aster.cx_switches
-        LOG.info("Server and cx switch connect infos >>> %s", switch_infos)
-
-        # Sort by switch_ip
-        return [(k, v) for k, v in switch_infos.items()]
-
-        #
+        LOG.debug("Server and cx switch connect infos: %s", switch_infos)
         #   switch_ip     switch_interfaces  host_id      physical_network
         #  192.168.4.102      ['X25']       controller     physnet_4_102
         #  192.168.4.102      ['X23']       computer1      physnet_4_102
@@ -169,39 +171,11 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
         #  192.168.4.105                    controller     physnet_4_105
         #  192.168.4.105                    computer1      physnet_4_105
         #  192.168.4.105      ['X37']       computer2      physnet_4_105
-        #
-
-        #
-        # switch_infos = {}
-        # session = lib_db_api.get_reader_session()
-        # with session.begin():
-        #     switch_host_mappings = session.query(aster_models_v2.AsterCxHostMapping).all()
-        #     for switch_host_mapping in switch_host_mappings:
-        #         switch_ip = switch_host_mapping.get("switch_ip")
-        #         host_id = switch_host_mapping.get("host_id")
-        #         switch_info = switch_infos.get(switch_ip)
-        #         if switch_info:
-        #             switch_info["host_ports_mapping"].update({
-        #                 host_id: switch_host_mapping.get("switch_interfaces")
-        #             })
-        #         else:
-        #             switch_infos.update({
-        #                 switch_ip: {
-        #                     "physnet": switch_host_mapping.get("physical_network"),
-        #                     'host_ports_mapping': {
-        #                         host_id: switch_host_mapping.get("switch_interfaces")
-        #                     }
-        #                 }
-        #             })
-        # # Sorted by dict key(switch_ip)
-        # sorted_switch_infos = sorted(switch_infos.items(), key=lambda d: d[0])
-        # return sorted_switch_infos
-        #
-        # ret = {"1": "2", "3": "2", "2": "1"}
-        # [('1', '2'), ('2', '1'), ('3', '2')]
+        return [(k, v) for k, v in switch_infos.items()]
 
     def _get_port_connections(self, port, host_id):
-        LOG.debug("Getting server connection's cx switches. port %(port)s on host_id %(host_id)s",
+        LOG.debug("Getting server connection's cx switches. "
+                  "port %(port)s on host_id %(host_id)s",
                   {'port': port,
                    'host_id': host_id})
         # Get sever connect server port info and physical_network info
@@ -212,12 +186,15 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                 ret.append((switch_ip, switch_info))
         return ret
 
-    def _configure_physical_switch_db(self, port=None, vxlan_segment=None, vlan_segment=None):
+    def _configure_physical_switch_db(self, port=None, vxlan_segment=None,
+                                      vlan_segment=None):
         # Check that both segments are valid
-        if not self._is_valid_segment(vxlan_segment=vxlan_segment, vlan_segment=vlan_segment):
+        if not self._is_valid_segment(vxlan_segment=vxlan_segment,
+                                      vlan_segment=vlan_segment):
             return
         network_id = port.get("network_id")
-        subnet_detail = utils.get_subnet_detail_by_network_id(network_id=network_id)
+        subnet_detail = utils.get_subnet_detail_by_network_id(
+            network_id=network_id)
         if not subnet_detail:
             return
         subnet_id = subnet_detail.get("subnet_id")
@@ -234,7 +211,8 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                 continue
             session = lib_db_api.get_reader_session()
             with session.begin():
-                vni_member_mappings = session.query(aster_models_v2.AsterPortBinding). \
+                vni_member_mappings = session.\
+                    query(aster_models_v2.AsterPortBinding).\
                     filter_by(switch_ip=switch_ip, subnet_id=subnet_id).all()
                 if not vni_member_mappings:
                     session = lib_db_api.get_writer_session()
@@ -247,12 +225,15 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                     session.add(binding)
                     session.flush()
 
-    def _configure_physical_switch(self, port=None, vxlan_segment=None, vlan_segment=None):
+    def _configure_physical_switch(self, port=None,
+                                   vxlan_segment=None, vlan_segment=None):
         # Check that both segments are valid
-        if not self._is_valid_segment(vxlan_segment=vxlan_segment, vlan_segment=vlan_segment):
+        if not self._is_valid_segment(vxlan_segment=vxlan_segment,
+                                      vlan_segment=vlan_segment):
             return
         network_id = port.get("network_id")
-        subnet_detail = utils.get_subnet_detail_by_network_id(network_id=network_id)
+        subnet_detail = utils.get_subnet_detail_by_network_id(
+            network_id=network_id)
         if not subnet_detail:
             return
         subnet_id = subnet_detail.get("subnet_id")
@@ -261,21 +242,27 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
         physical_network = vlan_segment.get(api.PHYSICAL_NETWORK)
         l2_vni = vxlan_segment.get(api.SEGMENTATION_ID)
         vlan_id = vlan_segment.get(api.SEGMENTATION_ID)
-        host_connections = self._get_port_connections(port, port.get(portbindings.HOST_ID))
+        host_connections = self._get_port_connections(
+            port, port.get(portbindings.HOST_ID))
 
         for switch_ip, host_connection in host_connections:
             if host_connection.get("physnet") != physical_network:
                 continue
             session = lib_db_api.get_reader_session()
-            vni_member_mappings = session.query(aster_models_v2.AsterPortBinding). \
-                filter_by(switch_ip=switch_ip, is_config_l2=False, subnet_id=subnet_id).all()
+            vni_member_mappings = session.query(
+                aster_models_v2.AsterPortBinding).filter_by(
+                    switch_ip=switch_ip,
+                    is_config_l2=False,
+                    subnet_id=subnet_id).all()
 
             # Determine if the configuration of L2-VNI needs to be configured
             host_ports_mapping = host_connection.get("host_ports_mapping")
             if vni_member_mappings and host_ports_mapping:
-                # Get the interface_names that the physical switch needs to be configured
+                # Get the interface_names that the physical
+                # switch needs to be configured
                 interface_names = []
-                list(interface_names.extend(switch_ports) for switch_ports in host_ports_mapping.values())
+                list(interface_names.extend(switch_ports)
+                     for switch_ports in host_ports_mapping.values())
 
                 config_params = {
                     "switch_ip": switch_ip,
@@ -288,45 +275,56 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                 }
                 # TODO config exception handing
                 self.afc_api.send_config_to_afc(config_params)
-                LOG.info("Distribution configuration succeeded on [%s] Aster Switch, config_params >>> \n %s \n",
-                         switch_ip, json.dumps(config_params, indent=3))
+                LOG.debug("Distribution configuration succeeded on "
+                          "[%s] Aster Switch, config_params: \n %s \n",
+                          switch_ip, json.dumps(config_params, indent=3))
 
                 # Determines whether the subnet is connected to a VRouter
-                conn_router_interface = utils.get_router_interface_by_subnet_id(
-                    self, subnet_id=subnet_id
-                )
+                conn_router_interface = utils.\
+                    get_router_interface_by_subnet_id(self,
+                                                      subnet_id=subnet_id)
                 if conn_router_interface:
-                    # The corresponding VRF needs to be configured on this switch
+                    # The corresponding VRF needs to be configured on
+                    # this switch
                     add_vrf_params = copy.deepcopy(conn_router_interface)
                     add_vrf_params.update({
                         "switch_ip": switch_ip,
                         "vlan_id": vlan_id
                     })
-                    LOG.info("Add the VRF configuration on the [%s], params >>> \n %s \n",
-                             switch_ip, json.dumps(add_vrf_params, indent=3))
+                    LOG.debug("Add the VRF configuration on the [%s],"
+                              "params: \n %s \n",
+                              switch_ip, json.dumps(add_vrf_params, indent=3))
 
                     # Add the VRF configuration on specified physical switch
                     # TODO config exception handing
                     add_interface_to_router(add_vrf_params=add_vrf_params)
                     router_id = add_vrf_params.get("id")
                     l3_vni = add_vrf_params.get("l3_vni")
-                    # Record the configuration of the L3-VNI on the specified physical switch by switch_ip
+                    # Record the configuration of the L3-VNI on the specified
+                    # physical switch by switch_ip
                     session, ctx_manager = utils.get_writer_session()
                     with ctx_manager:
-                        session.query(aster_models_v2.AsterPortBinding). \
-                            filter_by(switch_ip=switch_ip, is_config_l2=False, subnet_id=subnet_id). \
-                            update({"router_id": router_id, "l3_vni": l3_vni})
+                        session.query(aster_models_v2.AsterPortBinding).\
+                            filter_by(switch_ip=switch_ip,
+                                      is_config_l2=False,
+                                      subnet_id=subnet_id).\
+                            update({"router_id": router_id,
+                                    "l3_vni": l3_vni})
                         session.flush()
 
                 # Record had config
                 session, ctx_manager = utils.get_writer_session()
                 with ctx_manager:
-                    session.query(aster_models_v2.AsterPortBinding). \
-                        filter_by(switch_ip=switch_ip, is_config_l2=False, subnet_id=subnet_id). \
+                    session.query(
+                        aster_models_v2.AsterPortBinding).\
+                        filter_by(switch_ip=switch_ip,
+                                  is_config_l2=False,
+                                  subnet_id=subnet_id).\
                         update({"is_config_l2": True})
                     session.flush()
 
-    def _delete_physical_switch_config(self, port=None, vxlan_segment=None, vlan_segment=None):
+    def _delete_physical_switch_config(self, port=None,
+                                       vxlan_segment=None, vlan_segment=None):
         if vxlan_segment is None or vlan_segment is None:
             return
         subnet_detail = utils.get_subnet_detail_by_network_id(
@@ -348,25 +346,32 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                 continue
             host_ids = host_connection.get("host_ports_mapping").keys()
             # One cx switch can connect more server nodes
-            # Get all ports for subnet on the specified hosts, maybe have more host
+            # Get all ports for subnet on the specified hosts,
+            # maybe have more host
             subnet_ports_on_host = utils.get_ports_by_subnet(
                 subnet_id=subnet_id, host_ids=host_ids
             )
-            LOG.info(">>>> switch_ip: [%s] <--> host_ids: %s  subnet_ports_on_host number is [ %s ]",
-                     switch_ip, host_ids, len(subnet_ports_on_host))
+            LOG.debug("Switch_ip: [%s] <--> host_ids: %s"
+                      "subnet_ports_on_host number is [ %s ]",
+                      switch_ip, host_ids, len(subnet_ports_on_host))
 
             session = lib_db_api.get_reader_session()
-            vni_member_mappings = session.query(aster_models_v2.AsterPortBinding). \
-                filter_by(switch_ip=switch_ip, subnet_id=subnet_id).all()
+            vni_member_mappings = session.query(
+                aster_models_v2.AsterPortBinding).\
+                filter_by(switch_ip=switch_ip,
+                          subnet_id=subnet_id).all()
             host_ports_mapping = host_connection.get("host_ports_mapping")
-            if not subnet_ports_on_host and vni_member_mappings and host_ports_mapping:
+            if (not subnet_ports_on_host and
+                    vni_member_mappings and
+                    host_ports_mapping):
                 interface_names = []
-                list(interface_names.extend(switch_ports) for switch_ports in host_ports_mapping.values())
+                list(interface_names.extend(switch_ports)
+                     for switch_ports in host_ports_mapping.values())
                 # Remove the VRF configuration
                 # Find VRouter L3-VNI by subnet_id if exist clean the VRF
-                conn_router_interface = utils.get_router_interface_by_subnet_id(
-                    self, subnet_id=subnet_id
-                )
+                conn_router_interface = utils.\
+                    get_router_interface_by_subnet_id(self,
+                                                      subnet_id=subnet_id)
                 if conn_router_interface:
                     del_vrf_params = copy.deepcopy(conn_router_interface)
                     del_vrf_params.update({
@@ -374,14 +379,19 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                         "vlan_id": vlan_id
                     })
                     try:
-                        # Clean the VRF configuration on specified physical switch
-                        delete_interface_from_router(del_vrf_params=del_vrf_params)
-                        LOG.info("Remove the VRF configuration on the [%s], params >>> \n %s \n",
-                                 switch_ip, json.dumps(del_vrf_params, indent=3))
+                        # Clean the VRF configuration on
+                        # specified physical switch
+                        delete_interface_from_router(
+                            del_vrf_params=del_vrf_params)
+                        LOG.debug("Remove the VRF configuration on the [%s], "
+                                  "params: \n %s \n",
+                                  switch_ip, json.dumps(del_vrf_params,
+                                                        indent=3))
                     except Exception as ex:
-                        LOG.error("Remove the VRF configuration on the [%s] failed, params >>> \n %s \n,"
-                                  "Exception = %s",
-                                  switch_ip, json.dumps(del_vrf_params, indent=3), ex)
+                        LOG.error("Remove the VRF configuration on the [%s] "
+                                  "failed, params: \n %s \n, Exception = %s",
+                                  switch_ip,
+                                  json.dumps(del_vrf_params, indent=3), ex)
 
                 delete_params = {
                     "switch_ip": switch_ip,
@@ -394,15 +404,21 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                 }
                 try:
                     self.afc_api.delete_config_from_afc(delete_params)
-                    LOG.info("Delete configuration succeeded on [%s] Aster Switch, config_params >>> \n %s \n",
-                             switch_ip, json.dumps(delete_params, indent=3))
+                    LOG.debug("Delete configuration succeeded on [%s] Aster"
+                              "Switch, config_params: \n %s \n",
+                              switch_ip, json.dumps(delete_params, indent=3))
                 except Exception as ex:
-                    LOG.error("Delete configuration failed on [%s] Aster Switch, config_params >>> \n %s \n,"
-                              "Exception = %s", switch_ip, json.dumps(delete_params, indent=3), ex)
+                    LOG.error("Delete configuration failed on [%s] Aster "
+                              "Switch, config_params: \n %s \n,"
+                              "Exception = %s", switch_ip,
+                              json.dumps(delete_params, indent=3), ex)
 
                 session = lib_db_api.get_writer_session()
-                session.query(aster_models_v2.AsterPortBinding). \
-                    filter_by(switch_ip=switch_ip, subnet_id=subnet_id).delete()
+                session.query(
+                    aster_models_v2.AsterPortBinding
+                    ).filter_by(
+                        switch_ip=switch_ip, subnet_id=subnet_id
+                        ).delete()
                 session.flush()
 
     @lockutils.synchronized('aster-cx-port')
@@ -411,16 +427,20 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
         vlan_segment, vxlan_segment = self._get_segments(
             context.top_bound_segment, context.bottom_bound_segment
         )
-        original_vlan_segment, original_vxlan_segment = self._get_segments(
-            context.original_top_bound_segment, context.original_bottom_bound_segment
+        original_vlan_segment, _ = self._get_segments(
+            context.original_top_bound_segment,
+            context.original_bottom_bound_segment
         )
-        if self._is_vm_migrating(context, vlan_segment, original_vlan_segment) or \
-                self._is_status_down(context.current):
-            # Handle VM migrating or VM's port status is ERROR, DOWN indicates the port is down.
+        if (self._is_vm_migrating(context, vlan_segment,
+                                  original_vlan_segment) or
+                self._is_status_down(context.current)):
+            # Handle VM migrating or VM's port status is ERROR,
+            # DOWN indicates the port is down.
             pass
         elif self._is_supported_device_owner(context.current):
             self._configure_physical_switch_db(
-                port=context.current, vxlan_segment=vxlan_segment, vlan_segment=vlan_segment
+                port=context.current, vxlan_segment=vxlan_segment,
+                vlan_segment=vlan_segment
             )
 
     @lockutils.synchronized('aster-cx-port')
@@ -430,22 +450,32 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
             context.top_bound_segment, context.bottom_bound_segment
         )
         original_vlan_segment, original_vxlan_segment = self._get_segments(
-            context.original_top_bound_segment, context.original_bottom_bound_segment
+            context.original_top_bound_segment,
+            context.original_bottom_bound_segment
         )
 
-        if self._is_vm_migrating(context, vlan_segment, original_vlan_segment) or \
-                self._is_status_down(context.current):
-            # Multiple physical switches are connected according to the server node
-            # where the original port is located and are configured to delete accordingly
+        if (self._is_vm_migrating(context, vlan_segment,
+                                  original_vlan_segment) or
+                self._is_status_down(context.current)):
+            # Multiple physical switches are connected according to
+            # the server node where the original port is located
+            # and are configured to delete accordingly
             self._delete_physical_switch_config(
-                port=context.original, vxlan_segment=original_vxlan_segment, vlan_segment=original_vlan_segment
+                port=context.original,
+                vxlan_segment=original_vxlan_segment,
+                vlan_segment=original_vlan_segment
             )
         elif self._is_supported_device_owner(context.current):
-            # Multiple physical switches are connected according to the server node
-            # where the current port is located and are configured to add accordingly
-            # For example, 1. create l2-vni and vlan mappings  2. create l3-vni and vlan mappings
+            # Multiple physical switches are connected according to the
+            # server node where the current port is located and are configured
+            # to add accordingly
+            # For example:
+            # 1. create l2-vni and vlan mappings
+            # 2. create l3-vni and vlan mappings
             self._configure_physical_switch(
-                port=context.current, vxlan_segment=vxlan_segment, vlan_segment=vlan_segment
+                port=context.current,
+                vxlan_segment=vxlan_segment,
+                vlan_segment=vlan_segment
             )
 
     @lockutils.synchronized('aster-cx-port')
@@ -462,11 +492,16 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                 context.top_bound_segment,
                 context.bottom_bound_segment
             )
-            # Multiple physical switches are connected according to the server node
-            # where the current port is located and are configured to delete accordingly
-            # For example, 1. delete l3-vni and vlan mappings 2. delete l2-vni and vlan mappings
+            # Multiple physical switches are connected according to the
+            # server node where the current port is located and are configured
+            # to delete accordingly
+            # For example:
+            # 1. delete l3-vni and vlan mappings
+            # 2. delete l2-vni and vlan mappings
             self._delete_physical_switch_config(
-                port=context.current, vxlan_segment=vxlan_segment, vlan_segment=vlan_segment
+                port=context.current,
+                vxlan_segment=vxlan_segment,
+                vlan_segment=vlan_segment
             )
 
     def bind_port(self, context):
@@ -489,8 +524,9 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
             if self._is_segment_aster_vxlan(segment):
                 # Find physical network setting for this host.
                 host_id = context.current.get(portbindings.HOST_ID)
-                host_connections = self._get_port_connections(context.current, host_id)
-                LOG.debug("host_connections is >>> %s", host_connections)
+                host_connections = self._get_port_connections(context.current,
+                                                              host_id)
+                LOG.debug("host_connections is: %s", host_connections)
 
                 for _, host_connection in host_connections:
                     physical_network = host_connection.get("physnet")
@@ -521,12 +557,12 @@ class AsterCXSwitchMechanismDriver(api.MechanismDriver):
                                              [dynamic_segment])
                 else:
                     raise exc.NoDynamicSegmentAllocated(
-                                        network_segment=network_id,
-                                        physnet=physical_network)
+                        network_segment=network_id,
+                        physnet=physical_network)
             else:
                 LOG.debug("No binding required for segment ID %(id)s, "
-                          "segment %(seg)s, phys net %(physical_network)s, and "
-                          "network type %(net_type)s",
+                          "segment %(seg)s, phys net %(physical_network)s, "
+                          "and network type %(net_type)s",
                           {'id': segment[api.ID],
                            'seg': segment[api.SEGMENTATION_ID],
                            'physical_network': segment[api.PHYSICAL_NETWORK],

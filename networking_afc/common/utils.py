@@ -85,7 +85,7 @@ def get_routers_and_interfaces(self):
 
 
 def get_router_interface_by_subnet_id(self, subnet_id=None):
-    routers, router_interfaces = get_routers_and_interfaces(self)
+    _, router_interfaces = get_routers_and_interfaces(self)
     for router_interface in router_interfaces:
         if router_interface.get("subnet_id") == subnet_id:
             return router_interface
@@ -106,7 +106,7 @@ def get_ports_by_subnet(**kwargs):
         'fixed_ips': {'subnet_id': [subnet_id]}
     }
 
-    LOG.info("Get all ports for subnet, filters params >>>> \n %s \n",
+    LOG.info("Get all ports for subnet, filters params is: \n %s \n",
              json.dumps(filters, indent=3))
 
     ports = core.get_ports(admin_ctx, filters=filters)
@@ -131,7 +131,8 @@ def get_ports_by_subnet(**kwargs):
         _bound_contexts = core.get_bound_ports_contexts(
             admin_ctx, port_ids, host
         )
-        LOG.info("Get host [%s] , _bound_contexts is >>> \n %s \n", host, _bound_contexts)
+        LOG.info("Get host [%s], _bound_contexts is: \n %s \n",
+                 host, _bound_contexts)
         port_bound_contexts.update(_bound_contexts)
 
     for port in ports:
@@ -178,11 +179,12 @@ def get_subnet_detail_by_network_id(network_id=None):
             ).filter_by(network_id=network_id).first()
         )
         if not db_result:
-            LOG.info("Get subnet detail is >>>>>>>>>>>>> %s", db_result)
+            LOG.info("Get subnet detail is: %s", db_result)
             return db_result
         result = {
             k: db_result[index]
-            for index, k in enumerate(('subnet_id', 'gip', 'cidr', 'ip_version'))
+            for index, k in enumerate(
+                ('subnet_id', 'gip', 'cidr', 'ip_version'))
         }
         if result:
             cidr = result.get("cidr")
@@ -226,8 +228,8 @@ def _format_gateway_result(db_result):
     result = {
         k: db_result[i]
         for i, k in enumerate(
-            ('device_id', 'network_id', 'subnet_id', 'gip', 'cidr', 'ip_version',
-             'fixed_ip', 'fixed_mac'))}
+            ('device_id', 'network_id', 'subnet_id', 'gip',
+             'cidr', 'ip_version', 'fixed_ip', 'fixed_mac'))}
     return result
 
 

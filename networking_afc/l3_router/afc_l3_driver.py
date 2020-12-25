@@ -9,9 +9,9 @@ from neutron.plugins.ml2.driver_context import NetworkContext
 
 from networking_afc.common import utils
 from networking_afc.common import api as afc_api
-from networking_afc.l3_router import  l3_vni_manager
-from networking_afc.l3_router import  l2_vni_manager
-from networking_afc.l3_router import  border_vlan_manager
+from networking_afc.l3_router import l3_vni_manager
+from networking_afc.l3_router import l2_vni_manager
+from networking_afc.l3_router import border_vlan_manager
 from networking_afc.db.models import aster_models_v2
 
 
@@ -51,13 +51,13 @@ def add_interface_to_router(add_vrf_params=None):
         switch_vrf_binds = session.query(aster_models_v2.AsterPortBinding). \
             filter_by(switch_ip=switch_ip, router_id=router_id).all()
         if not switch_vrf_binds:
-            # 1. Create VRF on the physical switch
-            # 2. Bind Vlan{vlan_id} interface to VRF and config interface ip
+            # 1. Create vrf on the physical switch
+            # 2. Bind Vlan{vlan_id} interface to vrf and config interface ip
             # 3. Add evpn map [ l3-VNI <----> Vnet{l3-VNI} ]
-            LOG.info("Need create VRF !!!!!!!!!!!!!!!!!!!!!!!!!")
+            LOG.debug("Need to create vrf first.")
         else:
-            # 1. Bind Vlan{vlan_id} interface to VRF and config interface ip
-            LOG.info("Not create VRF !!!!!!!!!!!!!!!!!!!!!!!!!")
+            # 1. Bind Vlan{vlan_id} interface to vrf and config interface ip
+            LOG.debug("Don't need to create vrf.")
 
 
 def delete_interface_from_router(del_vrf_params=None):
@@ -91,17 +91,18 @@ def delete_interface_from_router(del_vrf_params=None):
 
     session, read_ctx_manager = utils.get_read_session()
     with read_ctx_manager:
-        switch_vrf_binds = session.query(aster_models_v2.AsterPortBinding). \
+        switch_vrf_binds = session.query(aster_models_v2.AsterPortBinding).\
             filter_by(switch_ip=switch_ip, router_id=router_id).all()
         if len(switch_vrf_binds) == 1:
-            # 1. Remove Vlan{vlan_id} interface ip and Unbind Vlan{vlan_id} interface from VRF
+            # 1. Remove Vlan{vlan_id} interface ip and Unbind Vlan{vlan_id}
+            #    interface from vrf
             # 2. Delete evpn map [ l3-VNI <----> Vnet{l3-VNI} ]
-            # 3. Delete VRF on the physical switch
-            LOG.info(">>>>>>>>>>>>>>>>>> Delete Vnet and l3_vni evpn map, DEL VRF", )
+            # 3. Delete vrf on the physical switch
+            LOG.debug("Delete vnet, l3_vni evpn map and vrf")
         else:
             # 1. Remove Vlan{vlan_id} interface ip
-            # 2. Unbind Vlan{vlan_id} interface from VRF
-            LOG.info(">>>>>>>>>>>>>>>>>> Not DEL VRF, only remove vlan interface")
+            # 2. Unbind Vlan{vlan_id} interface from vrf
+            LOG.debug("Only remove vlan interface")
 
 
 class AFCL3Driver(object):
@@ -121,7 +122,7 @@ class AFCL3Driver(object):
             return
         ip_version = router_info['ip_version']
         if ip_version == 6:
-            LOG.info('IPv6 networks not supported with L3 plugin')
+            LOG.debug('IPv6 networks not supported with L3 plugin')
             return
         network_id = router_info.get("network_id")
         admin_ctx = neutron_context.get_admin_context()
@@ -147,8 +148,8 @@ class AFCL3Driver(object):
         router_id = router_info.get("id")
         gw_port_id = router_info.get("gw_port_id")
         _router_info = self._prepare_network_default_gateway(gw_port_id)
-        LOG.info("_add_network_default_gateway info >>>>>>>>>>>>>>>>>>>> \n %s \n ",
-                 json.dumps(_router_info, indent=3))
+        LOG.debug("_add_network_default_gateway info: \n %s \n ",
+                  json.dumps(_router_info, indent=3))
         l3_vni = router_info.get("l3_vni")
         external_fixed_ip = _router_info.get("fixed_ip")
         gw_ip = _router_info.get("gip")
@@ -157,13 +158,17 @@ class AFCL3Driver(object):
 
         project_id = router_info.get("tenant_id")
 
-        ext_network_id = router_info["external_gateway_info"].get("network_id")
+        ext_network_id = router_info["external_gateway_info"].\
+            get("network_id")
         # Get the physical_network of external network
         # Special network types are used to connect external networks
-        ext_network_segments = utils.get_network_segments(network_id=ext_network_id)
-        if ext_network_segments and ext_network_segments.network_type not in ["aster_ext_net"]:
+        ext_network_segments = utils.get_network_segments(
+            network_id=ext_network_id)
+        if (ext_network_segments and
+                ext_network_segments.network_type not in ["aster_ext_net"]):
             return
-        physical_network = ext_network_segments.physical_network if ext_network_segments else None
+        physical_network = ext_network_segments.physical_network \
+            if ext_network_segments else None
 
         border_fixed_ip = "{}/{}".format(external_fixed_ip, subnet_mask)
         default_router_fixed_ip = "{}/{}".format(gw_ip, subnet_mask)
@@ -172,10 +177,11 @@ class AFCL3Driver(object):
         self.l2_vni_manager.allocation_l2_vni(router_id)
         l2_vni = utils.get_l2_vni_by_route_id(router_id)
         border_leafs = self._get_border_leaf_infos()
-        LOG.info(json.dumps(border_leafs, indent=3))
+        LOG.debug(json.dumps(border_leafs, indent=3))
 
         for border_leaf_ip, border_leaf in border_leafs.items():
-            interface_names = border_leaf["physical_network_ports_mapping"].get(physical_network)
+            interface_names = border_leaf["physical_network_ports_mapping"].\
+                get(physical_network)
             if not interface_names:
                 continue
             # Allocations one vlan by border_leaf_ip and router_id
@@ -185,8 +191,9 @@ class AFCL3Driver(object):
             vlan_id = utils.get_vlan_id_by_route_id(
                 switch_ip=border_leaf_ip, router_id=router_id
             )
-            LOG.info("Allocations Border leaf vlan, >>> border_leaf_ip: %s , router_id: %s, vlan_id: %s",
-                     border_leaf_ip, router_id, vlan_id)
+            LOG.debug("Allocations Border leaf vlan, "
+                      "border_leaf_ip: %s , router_id: %s, vlan_id: %s",
+                      border_leaf_ip, router_id, vlan_id)
             # Add router interface to VRouter
             config_params = {
                 "switch_ip": border_leaf_ip,
@@ -200,7 +207,7 @@ class AFCL3Driver(object):
             }
             # TODO config exception handing
             self.afc_api.send_config_to_afc(config_params)
-            # Add a default route to the external network on the VRF
+            # Add a default route to the external network on the vrf
             request_params = {
                 "switch_ip": border_leaf_ip,
                 "project_id": project_id,
@@ -211,7 +218,8 @@ class AFCL3Driver(object):
                 "if_ext_gw": True
             }
             # Send delete or update router rest request to AFC
-            self.afc_api.create_or_update_vrf_on_physical_switch(request_params)
+            self.afc_api.create_or_update_vrf_on_physical_switch(
+                request_params)
 
     def _del_network_default_gateway(self, router_info):
         ext_gateway = router_info.get("external_gateway_info")
@@ -228,12 +236,16 @@ class AFCL3Driver(object):
         gw_ip = subnet.get("gateway_ip")
         subnet_mask = subnet["cidr"].split('/')[1]
 
-        ext_network_id = router_info["external_gateway_info"].get("network_id")
+        ext_network_id = router_info["external_gateway_info"].\
+            get("network_id")
         # Get the physical_network of external network
-        ext_network_segments = utils.get_network_segments(network_id=ext_network_id)
-        if ext_network_segments and ext_network_segments.network_type not in ["aster_ext_net"]:
+        ext_network_segments = utils.get_network_segments(
+            network_id=ext_network_id)
+        if (ext_network_segments and
+           ext_network_segments.network_type not in ["aster_ext_net"]):
             return
-        physical_network = ext_network_segments.physical_network if ext_network_segments else None
+        physical_network = ext_network_segments.physical_network \
+            if ext_network_segments else None
 
         l3_vni = router_info.get("l3_vni")
         router_id = router_info.get("id")
@@ -244,13 +256,14 @@ class AFCL3Driver(object):
         # Clean default route on border leaf
         border_leafs = self._get_border_leaf_infos()
         for border_leaf_ip, border_leaf in border_leafs.items():
-            interface_names = border_leaf["physical_network_ports_mapping"].get(physical_network)
+            interface_names = border_leaf["physical_network_ports_mapping"].\
+                get(physical_network)
             if not interface_names:
                 continue
             vlan_id = utils.get_vlan_id_by_route_id(
                 switch_ip=border_leaf_ip, router_id=router_id
             )
-            # Remove a default route to the external network on the VRF
+            # Remove a default route to the external network on the vrf
             request_params = {
                 "switch_ip": border_leaf_ip,
                 "project_id": project_id,
@@ -261,11 +274,14 @@ class AFCL3Driver(object):
                 "if_ext_gw": True
             }
             try:
-                self.afc_api.delete_or_update_vrf_on_physical_switch(request_params)
+                self.afc_api.delete_or_update_vrf_on_physical_switch(
+                    request_params)
             except Exception as ex:
-                LOG.error("Remove the default gateway on the [%s] failed, params >>> \n %s \n,"
-                          "Exception = %s",
-                          border_leaf_ip, json.dumps(request_params, indent=3), ex)
+                LOG.error("Remove the default gateway on the [%s] failed, "
+                          "params >>> \n %s \n, Exception = %s",
+                          border_leaf_ip,
+                          json.dumps(request_params, indent=3),
+                          ex)
             # Remove router interface to VRouter
             config_params = {
                 "switch_ip": border_leaf_ip,
@@ -280,11 +296,13 @@ class AFCL3Driver(object):
             try:
                 self.afc_api.delete_config_from_afc(config_params)
             except Exception as ex:
-                LOG.error("Remove the default gateway on the [%s] failed, params >>> \n %s \n,"
-                          "Exception = %s",
-                          border_leaf_ip, json.dumps(config_params, indent=3), ex)
-            LOG.info("Remove the default gateway on the [%s], l3-VNI: %s ",
-                     border_leaf_ip, l3_vni)
+                LOG.error("Remove the default gateway on the [%s] failed, "
+                          "params >>> \n %s \n, Exception = %s",
+                          border_leaf_ip,
+                          json.dumps(config_params, indent=3),
+                          ex)
+            LOG.debug("Remove the default gateway on the [%s], l3-VNI: %s ",
+                      border_leaf_ip, l3_vni)
             # Release vlan and write router_id is "" to db
             self.border_vlan_manager.release_segment(
                 leaf_ip=border_leaf_ip, router_id=router_id
@@ -319,7 +337,7 @@ class AFCL3Driver(object):
                 "l3_vni": l3_vni
             })
             self._del_network_default_gateway(router_info)
-            LOG.info("Clean external gateway, >>>>>>>>>>>>> %s", router_info)
+            LOG.debug("Clean external gateway: %s", router_info)
         elif not original_ext_gateway and new_ext_gateway:
             # Add external gateway
             router_info = copy.deepcopy(new_router)
@@ -338,7 +356,7 @@ class AFCL3Driver(object):
                 "l3_vni": l3_vni
             })
             self._del_network_default_gateway(router_info)
-            LOG.info("Clean external gateway, >>>>>>>>>>>>> %s", router_info)
+            LOG.debug("Clean external gateway: %s", router_info)
 
         # Release l3 vni from VRouter
         self.l3_vni_manager.release_l3_vni(router_id)
@@ -350,7 +368,8 @@ class AFCL3Driver(object):
 
         session, read_ctx_manager = utils.get_read_session()
         with read_ctx_manager:
-            l2_vni_member_mappings = session.query(aster_models_v2.AsterPortBinding). \
+            l2_vni_member_mappings = session.\
+                query(aster_models_v2.AsterPortBinding).\
                 filter_by(subnet_id=subnet_id).\
                 group_by(aster_models_v2.AsterPortBinding.switch_ip).all()
 
@@ -362,17 +381,18 @@ class AFCL3Driver(object):
                 "vlan_id": l2_vni_member_mapping.get("vlan_id")
             }
             add_vrf_params.update(_router_info)
-            LOG.info("Add the VRF configuration on the [%s], params >>> \n %s \n",
-                     switch_ip, json.dumps(add_vrf_params, indent=3))
+            LOG.debug("Add the vrf configuration on the [%s]: \n %s \n",
+                      switch_ip, json.dumps(add_vrf_params, indent=3))
 
-            # Add the VRF configuration on specified physical switch
+            # Add the vrf configuration on specified physical switch
             add_interface_to_router(add_vrf_params=add_vrf_params)
-            # Record the configuration of the L3-VNI on the specified physical switch by switch_ip
+            # Record the configuration of the L3-VNI on the specified
+            # physical switch by switch_ip
             l3_vni = router_info.get("l3_vni")
             session, ctx_manager = utils.get_writer_session()
             with ctx_manager:
-                session.query(aster_models_v2.AsterPortBinding). \
-                    filter_by(switch_ip=switch_ip, subnet_id=subnet_id). \
+                session.query(aster_models_v2.AsterPortBinding).\
+                    filter_by(switch_ip=switch_ip, subnet_id=subnet_id).\
                     update({"router_id": router_id, "l3_vni": l3_vni})
                 session.flush()
 
@@ -382,7 +402,8 @@ class AFCL3Driver(object):
 
         session, read_ctx_manager = utils.get_read_session()
         with read_ctx_manager:
-            l2_vni_member_mappings = session.query(aster_models_v2.AsterPortBinding). \
+            l2_vni_member_mappings = session.\
+                query(aster_models_v2.AsterPortBinding).\
                 filter_by(subnet_id=subnet_id).\
                 group_by(aster_models_v2.AsterPortBinding.switch_ip).all()
 
@@ -394,12 +415,13 @@ class AFCL3Driver(object):
                 "vlan_id": l2_vni_member_mapping.get("vlan_id")
             }
             del_vrf_params.update(_router_info)
-            LOG.info("Remove the VRF configuration on the [%s], params >>> \n %s \n",
-                     switch_ip, json.dumps(del_vrf_params, indent=3))
+            LOG.debug("Remove the vrf configuration on the [%s]: \n %s \n",
+                      switch_ip, json.dumps(del_vrf_params, indent=3))
 
-            # Clean the VRF configuration on this physical switch
+            # Clean the vrf configuration on this physical switch
             delete_interface_from_router(del_vrf_params=del_vrf_params)
-            # Removes the record for l3-VNI on the specified physical switch by switch_ip
+            # Removes the record for l3-VNI on the specified physical
+            # switch by switch_ip
             session, ctx_manager = utils.get_writer_session()
             with ctx_manager:
                 session.query(aster_models_v2.AsterPortBinding). \

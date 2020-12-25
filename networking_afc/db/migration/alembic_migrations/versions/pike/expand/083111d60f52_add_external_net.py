@@ -29,18 +29,32 @@ import sqlalchemy as sa
 revision = '083111d60f52'
 down_revision = 'a4fd5f0f33a5'
 
+
 def upgrade():
     op.create_table(
         'ml2_leaf_l2_vni_allocations',
-        sa.Column('l2_vni', sa.Integer(), autoincrement=False, nullable=False),
-        sa.Column('router_id', sa.String(36), nullable=False, server_default=''),
+        sa.Column('l2_vni',
+                  sa.Integer(),
+                  autoincrement=False,
+                  nullable=False),
+        sa.Column('router_id',
+                  sa.String(36),
+                  nullable=False,
+                  server_default=''),
         sa.PrimaryKeyConstraint('l2_vni')
     )
     op.create_table(
         'ml2_leaf_vlan_allocations',
-        sa.Column('switch_ip', sa.String(36), nullable=False, server_default=''),
-        sa.Column('vlan_id', sa.Integer(), nullable=False, default=0),
-        sa.Column('router_id', sa.String(36), nullable=False, server_default='')
+        sa.Column('switch_ip',
+                  sa.String(36),
+                  nullable=False,
+                  server_default=''),
+        sa.Column('vlan_id',
+                  sa.Integer(),
+                  nullable=False,
+                  default=0),
+        sa.Column('router_id',
+                  sa.String(36),
+                  nullable=False,
+                  server_default='')
     )
-
-

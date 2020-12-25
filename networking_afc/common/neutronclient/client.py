@@ -23,15 +23,9 @@ import os
 
 import debtcollector.renames
 from keystoneauth1 import access
-
 from keystoneauth1 import adapter
-
-#from neutron.plugins.ml2.drivers.mech_aster.mech_driver.keystoneauth1  import access
-#from neutron.plugins.ml2.drivers.mech_aster.mech_driver.keystoneauth1  import adapter
-
 from oslo_utils import importutils
 import requests
-
 from neutronclient._i18n import _
 from neutronclient.common import exceptions
 from neutronclient.common import utils
@@ -116,7 +110,8 @@ class HTTPClient(object):
         except Exception as e:
             # Wrap the low-level connection error (socket timeout, redirect
             # limit, decompression error, etc) into our custom high-level
-            # connection exception (it is excepted in the upper layers of code)
+            # connection exception (it is excepted in the upper layers of
+            # code)
             _logger.debug("throwing ConnectionFailed : %s", e)
             raise exceptions.ConnectionFailed(reason=e)
         utils.http_log_resp(_logger, resp, body)
@@ -205,13 +200,6 @@ class HTTPClient(object):
         except exceptions.Unauthorized:
             self.authenticate()
             kwargs.setdefault('headers', {})
-
-            print "2222222222222222222"
-            print "2222222222222222222"
-            print self.auth_token
-            print "2222222222222222222"
-            print "2222222222222222222"
-
             kwargs['headers']['X-Auth-Token'] = self.auth_token
             resp, body = self._cs_request(
                 self.endpoint_url + url, method, **kwargs)
@@ -219,12 +207,7 @@ class HTTPClient(object):
 
     def _extract_service_catalog(self, body):
         """Set the client's service catalog from the response data."""
-
-        print body
-
-        print "11111111"
         self.auth_ref = access.create(body=body)
-        print "13333"
         self.service_catalog = self.auth_ref.service_catalog
         self.auth_token = self.auth_ref.auth_token
         self.auth_tenant_id = self.auth_ref.tenant_id
@@ -243,25 +226,15 @@ class HTTPClient(object):
         else:
             creds = {'username': self.username,
                      'password': self.password}
-
         if self.project_id:
             body = {'auth': {'passwordCredentials': creds,
                              'tenantId': self.project_id, }, }
         else:
             body = {'auth': {'passwordCredentials': creds,
                              'tenantName': self.project_name, }, }
-
-        #print self.auth_url 
-
         if self.auth_url is None:
             raise exceptions.NoAuthURLProvided()
-
         token_url = self.auth_url + "/tokens"
-
-        print "1111111111111111"
-        print body
-        print "1111111111111111"
-
         resp, resp_body = self._cs_request(token_url, "POST",
                                            body=json.dumps(body),
                                            content_type="application/json",
@@ -299,7 +272,7 @@ class HTTPClient(object):
 
         url = self.auth_url + '/tokens/%s/endpoints' % self.auth_token
         try:
-            resp, body = self._cs_request(url, "GET")
+            _, body = self._cs_request(url, "GET")
         except exceptions.Unauthorized:
             # rollback to authenticate() to handle case when neutron client
             # is initialized just before the token is expired
@@ -351,18 +324,6 @@ class SessionClient(adapter.Adapter):
         if kwargs.get('data'):
             headers.setdefault('Content-Type', content_type)
 
-        #kwargs["headers"].update({
-        #    "X-Auth-Token": "gAAAAABexB1jl1eazliGJKJCndbrCf99GuA6XFBcKCabUQs0lT-UOCzA1TIqUkI8WIIPRk4BdVdBVUROMwzNEtNwqrGMEsFnN6nkPtiKdZgOdvQ-ZX_CCk-sn6Xd0rhFoc-kTnoy5xAiiu-ygMNQY2BmnMKV8nsMHJom7qlSwsd1z4IyJ-TNSgg"
-        #})
-        #kwargs.update({
-        #    "authenticated": False
-        #})
-
-        print  args
-        print  kwargs
-
-
-
         resp = super(SessionClient, self).request(*args, **kwargs)
         return resp, resp.text
 
@@ -373,16 +334,8 @@ class SessionClient(adapter.Adapter):
                 excess=uri_len - MAX_URI_LEN)
 
     def do_request(self, url, method, **kwargs):
-        print url
         kwargs.setdefault('authenticated', True)
         self._check_uri_length(url)
-
-        print "url............................."
-        print url
-        print method
-        print kwargs
-        print "url............................."
-
         return self.request(url, method, **kwargs)
 
     @property
@@ -425,8 +378,6 @@ class SessionClient(adapter.Adapter):
         return self.session.auth.get_auth_ref(self.session)
 
 
-# FIXME(bklei): Should refactor this to use kwargs and only
-# explicitly list arguments that are not None.
 @debtcollector.renames.renamed_kwarg('tenant_id', 'project_id', replace=True)
 @debtcollector.renames.renamed_kwarg(
     'tenant_name', 'project_name', replace=True)
@@ -451,8 +402,6 @@ def construct_http_client(username=None,
                           **kwargs):
 
     if session:
-
-        print "1111111111111"
         kwargs.setdefault('user_agent', USER_AGENT)
         kwargs.setdefault('interface', endpoint_type)
         return SessionClient(session=session,
@@ -461,9 +410,6 @@ def construct_http_client(username=None,
                              global_request_id=global_request_id,
                              **kwargs)
     else:
-        # FIXME(bklei): username and password are now optional. Need
-        # to test that they were provided in this mode.  Should also
-        # refactor to use kwargs.
         return HTTPClient(username=username,
                           password=password,
                           project_id=project_id,
