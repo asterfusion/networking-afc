@@ -60,11 +60,12 @@ def run_migrations_offline():
     else:
         kwargs['g'] = neutron_config.database.engine
     kwargs['include_object'] = include_object
-    kwargs['version_table'] = ASTER_VERSION_TABLE 
+    kwargs['version_table'] = ASTER_VERSION_TABLE
     context.configure(**kwargs)
 
     with context.begin_transaction():
         context.run_migrations()
+
 
 @event.listens_for(sa.Table, 'after_parent_attach')
 def set_storage_engine(target, parent):

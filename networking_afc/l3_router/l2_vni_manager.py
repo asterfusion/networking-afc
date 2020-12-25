@@ -5,6 +5,7 @@ from oslo_log import log as logging
 from oslo_db import exception as db_exc
 from networking_afc.db.models import aster_models_v2
 from networking_afc.common import utils
+from neutronclient._i18n import _
 
 
 LOG = logging.getLogger(__name__)
@@ -49,8 +50,6 @@ class L2VniManager(object):
                 tunnel_range = int(l2_vni_min), int(l2_vni_max)
             except ValueError as ex:
                 raise ex
-                # raise exc.NetworkTunnelRangeError(tunnel_range=entry, error=ex)
-            # self._parse_nexus_vni_range(tunnel_range)
             current_range.append(tunnel_range)
 
         LOG.info("Aster CX Switch L3 VNI ranges: %(range)s",
@@ -104,7 +103,8 @@ class L2VniManager(object):
         session, ctx_manager = utils.get_writer_session()
         try:
             with ctx_manager:
-                all_l2_vni = session.query(aster_models_v2.AsterL2VNIAllocation).\
+                all_l2_vni = session.query(
+                    aster_models_v2.AsterL2VNIAllocation).\
                     filter_by(router_id="").all()
                 if not all_l2_vni:
                     # No resource available
@@ -116,9 +116,10 @@ class L2VniManager(object):
                 session.flush()
         except db_exc.DBDuplicateEntry as ex:
             # Segment already allocated (insert failure)
-            raise  ex
+            raise ex
 
     def release_l2_vni(self, router_id):
+        # do not pass unit test
         # Release l2 vni from VRouter
         l2_vnis = set()
         for l2_vni_min, l2_vni_max in self.l2_vni_ranges:
