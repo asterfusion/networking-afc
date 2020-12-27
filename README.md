@@ -153,7 +153,7 @@ systemctl restart neutron-server
 ##  Uninstall
 1.  Uninstall neiworking-afc plugin.
 ```
-pip uninstall networking_afc
+pip uninstall networking-afc
 ```
 2.  Overwrite the configuration file with the backup files in step.0 and restart the services respectively.
 ```
