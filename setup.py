@@ -27,7 +27,7 @@ setup(
     name="networking_afc",
     url="None",
     zip_safe=False,
-    version="0.9",
+    version="v1.0.1_294bc840-20201225",
     package_data=_package_data,
     packages=find_packages(),
     entry_points=_entry_points
