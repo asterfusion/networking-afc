@@ -140,7 +140,7 @@ systemctl restart neutron-openvswitch-agent
 ## Install 
 1.  Install networking-afc plugin (get from) and update database
 ```
-pip install networking_afc_vx.x-xxxxx.whl
+python setup.py install
 neutron-db-manage --subproject networking_afc upgrade head
 ```
 
@@ -153,7 +153,7 @@ systemctl restart neutron-server
 ##  Uninstall
 1.  Uninstall neiworking-afc plugin.
 ```
-pip uninstall networking_afc_vx.x-xxxxx.whl
+pip uninstall networking_afc
 ```
 2.  Overwrite the configuration file with the backup files in step.0 and restart the services respectively.
 ```
@@ -164,11 +164,4 @@ systemctl restart neutron-server
 systemctl restart neutron-openvswitch-agent
 ```
 
-## Tests
-Like other OpenStack projects, we uses `tox` to manage the virtual environments for running test cases and static analysis.
-Tox handles the creation of `virtualenv` that targets specific version of Python2.7 here.
-
-Running tests (inclede unit tests and static tests) is as easy as executing this in the root directory of the networking-afc plugin code::
-
-    tox
 
