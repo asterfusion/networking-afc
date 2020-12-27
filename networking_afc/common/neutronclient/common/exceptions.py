@@ -77,7 +77,7 @@ class NeutronClientException(NeutronException):
     error_info = {}
 
     def __init__(self, message=None, **kwargs):
-        self.error_info = kwargs.get('error_info',{})
+        self.error_info = kwargs.get('error_info', {})
         self.request_ids = kwargs.get('request_ids')
         if 'status_code' in kwargs:
             self.status_code = kwargs['status_code']
@@ -262,4 +262,3 @@ class NeutronClientNoUniqueMatch(NeutronCLIError):
 
 class JsonFileNotCorrect(NeutronClientException):
     message = _("Input JSON file %(file_name)s is not correct. ")
-
