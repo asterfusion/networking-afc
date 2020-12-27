@@ -140,7 +140,7 @@ systemctl restart neutron-openvswitch-agent
 ## Install 
 1.  Install networking-afc plugin (get from) and update database
 ```
-pip install networking_afc_vx.x-xxxxx.whl
+python setup.py install
 neutron-db-manage --subproject networking_afc upgrade head
 ```
 
@@ -153,7 +153,7 @@ systemctl restart neutron-server
 ##  Uninstall
 1.  Uninstall neiworking-afc plugin.
 ```
-pip uninstall networking_afc_vx.x-xxxxx.whl
+pip uninstall networking-afc
 ```
 2.  Overwrite the configuration file with the backup files in step.0 and restart the services respectively.
 ```
