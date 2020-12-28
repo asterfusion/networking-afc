@@ -1,60 +1,27 @@
-# Copyright (c) 2014-2016 Cisco Systems, Inc.
-# All Rights Reserved.
-#
-#    Licensed under the Apache License, Version 2.0 (the "License"); you may
-#    not use this file except in compliance with the License. You may obtain
-#    a copy of the License at
-#
-#         http://www.apache.org/licenses/LICENSE-2.0
-#
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-#    License for the specific language governing permissions and limitations
-#    under the License.
-#
 import six
-import netaddr
+# import netaddr
 
-import sqlalchemy as sa
+# import sqlalchemy as sa
 from oslo_log import log
 from oslo_config import cfg
-from oslo_utils import excutils
+# from oslo_utils import excutils
 
-
-# from networking_cisco.ml2_drivers.nexus import (
-#     constants as const)
-# from networking_cisco.ml2_drivers.nexus import (
-#     aster_models_v2)
-
-# from neutron.db import model_base
-
-# from networking_cisco._i18n import _
 from neutron._i18n import _
-
-# from networking_cisco import backwards_compatibility as bc
-# from networking_cisco.backwards_compatibility import constants as p_const
-# from networking_cisco.backwards_compatibility import ml2_api as api
-
 from neutron_lib import constants as p_const
-# from neutron_lib.plugins.ml2 import api as ml2_api as api
 from neutron_lib.plugins.ml2 import api
-
 from neutron.plugins.ml2.drivers import type_tunnel
-
 from networking_afc.db.models import aster_models_v2
-
 from neutron_lib import exceptions as exc
+from neutron_lib.db import api as lib_db_api
 
 LOG = log.getLogger(__name__)
 
-# For VLAN Network
-# MIN_VLAN_TAG = 1
-# MAX_VLAN_TAG = 4094
+# try:
+#     from neutron import context
+# except ImportError:
+#     from neutron_lib import context
 
-
-# Nexus switches start VNI at 4096 = max VLAN + 2 (2 for reserved VLAN 0, 4095)
-MIN_NEXUS_VNI = p_const.MAX_VLAN_TAG + 2
+MIN_ASTER_VNI = p_const.MAX_VLAN_TAG + 2
 
 aster_vxlan_opts = [
     cfg.ListOpt('vni_ranges',
@@ -77,54 +44,37 @@ aster_vxlan_opts = [
 
 cfg.CONF.register_opts(aster_vxlan_opts, "ml2_type_aster_vxlan")
 
-try:
-    from neutron import context
-except ImportError:
-    from neutron_lib import context
-
-from neutron_lib.db import api as lib_db_api
 
 TYPE_ASTER_VXLAN = "aster_vxlan"
 
 
 class AsterCXVxlanTypeDriver(type_tunnel.ML2TunnelTypeDriver):
+
     def __init__(self):
         super(AsterCXVxlanTypeDriver, self).__init__(
-            aster_models_v2.AsterVxlanAllocation)
-
-    def _get_mcast_group_for_vni(self, context, vni):
-        # session = bc.get_tunnel_session(context)
-        session = context.session
-        mcast_grp = (session.query(aster_models_v2.NexusMcastGroup).
-                     filter_by(associated_vni=vni).first())
-        if not mcast_grp:
-            mcast_grp = self._allocate_mcast_group(session, vni)
-        return mcast_grp
+            aster_models_v2.AsterVxlanAllocation
+        )
 
     def get_type(self):
-        # return const.TYPE_NEXUS_VXLAN
         return TYPE_ASTER_VXLAN
 
     def initialize(self):
         self.tunnel_ranges = []
-        # self.conf_mcast_ranges = cfg.CONF.ml2_type_nexus_vxlan.mcast_ranges
         self.conf_mcast_ranges = cfg.CONF.ml2_type_aster_vxlan.mcast_ranges
         self._verify_vni_ranges()
         self.sync_allocations()
 
     def _verify_vni_ranges(self):
         try:
-            self.conf_vxlan_ranges = self._parse_nexus_vni_ranges(
+            self.conf_vxlan_ranges = self._parse_afc_vni_ranges(
                 cfg.CONF.ml2_type_aster_vxlan.vni_ranges, self.tunnel_ranges)
-            # self.conf_vxlan_ranges = self._parse_nexus_vni_ranges(
-            #     cfg.CONF.ml2_type_nexus_vxlan.vni_ranges, self.tunnel_ranges)
-            LOG.info("Aster CX Switche VNI ranges: %s", self.conf_vxlan_ranges)
+            LOG.info("Aster CX Switch VNI ranges: %s", self.conf_vxlan_ranges)
         except Exception:
             LOG.exception("Failed to parse vni_ranges. "
                           "Service terminated!")
             raise SystemExit()
 
-    def _parse_nexus_vni_ranges(self, tunnel_ranges, current_range):
+    def _parse_afc_vni_ranges(self, tunnel_ranges, current_range):
         for entry in tunnel_ranges:
             entry = entry.strip()
             try:
@@ -133,22 +83,23 @@ class AsterCXVxlanTypeDriver(type_tunnel.ML2TunnelTypeDriver):
                 tun_max = tun_max.strip()
                 tunnel_range = int(tun_min), int(tun_max)
             except ValueError as ex:
-                raise exc.NetworkTunnelRangeError(tunnel_range=entry, error=ex)
+                raise exc.NetworkTunnelRangeError(tunnel_range=entry,
+                                                  error=ex)
 
-            self._parse_nexus_vni_range(tunnel_range)
+            self._parse_aster_vni_range(tunnel_range)
             current_range.append(tunnel_range)
 
         LOG.info("Aster VXLAN ID ranges: %(range)s",
                  {'range': current_range})
 
-    def _parse_nexus_vni_range(self, tunnel_range):
+    def _parse_aster_vni_range(self, tunnel_range):
         """Raise an exception for invalid tunnel range or malformed range."""
         for ident in tunnel_range:
-            if not self._is_valid_nexus_vni(ident):
+            if not self._is_valid_afc_vni(ident):
                 raise exc.NetworkTunnelRangeError(
                     tunnel_range=tunnel_range,
-                    error=_("%(id)s is not a valid Nexus VNI value.") %
-                    {'id': ident})
+                    error=_("%(id)s is not a valid Aster CX Switch "
+                            "L2 VNI value.") % {'id': ident})
 
         if tunnel_range[1] < tunnel_range[0]:
             raise exc.NetworkTunnelRangeError(
@@ -156,52 +107,14 @@ class AsterCXVxlanTypeDriver(type_tunnel.ML2TunnelTypeDriver):
                 error=_("End of tunnel range is less than start of "
                         "tunnel range."))
 
-    def _is_valid_nexus_vni(self, vni):
+    def _is_valid_afc_vni(self, vni):
         # 4096 - 2 ** 24 - 1
-        return MIN_NEXUS_VNI <= vni <= p_const.MAX_VXLAN_VNI
-
-    def _parse_mcast_ranges(self):
-        ranges = (range.split(':') for range in self.conf_mcast_ranges)
-        for low, high in ranges:
-            for mcast_ip in netaddr.iter_iprange(low, high):
-                if mcast_ip.is_multicast():
-                    yield str(mcast_ip)
-
-    def _allocate_mcast_group(self, session, vni):
-        allocs = dict(session.query(aster_models_v2.
-                                    NexusMcastGroup.mcast_group,
-                      sa.func.count(aster_models_v2.
-                                    NexusMcastGroup.mcast_group)).
-                      group_by(aster_models_v2.
-                               NexusMcastGroup.mcast_group).all())
-
-        mcast_for_vni = None
-        for mcast_ip in self._parse_mcast_ranges():
-            if not six.u(mcast_ip) in allocs:
-                mcast_for_vni = mcast_ip
-                break
-        try:
-            if not mcast_for_vni:
-                mcast_for_vni = min(allocs, key=allocs.get)
-        except ValueError:
-            with excutils.save_and_reraise_exception():
-                LOG.exception("Unable to allocate a multicast group for "
-                              "VNID:%s", vni)
-
-        alloc = aster_models_v2.NexusMcastGroup(mcast_group=mcast_for_vni,
-                                associated_vni=vni)
-
-        session.add(alloc)
-        session.flush()
-        return mcast_for_vni
+        return MIN_ASTER_VNI <= vni <= p_const.MAX_VXLAN_VNI
 
     def allocate_tenant_segment(self, context):
         alloc = self.allocate_partially_specified_segment(context)
         if not alloc:
             return
-        #vni = alloc.vxlan_vni
-        #mcast_group = self._get_mcast_group_for_vni(
-        #    context, vni)
         return {api.NETWORK_TYPE: TYPE_ASTER_VXLAN,
                 api.PHYSICAL_NETWORK: None,
                 api.SEGMENTATION_ID: alloc.vxlan_vni}
@@ -210,19 +123,11 @@ class AsterCXVxlanTypeDriver(type_tunnel.ML2TunnelTypeDriver):
         """
         Synchronize vxlan_allocations table with configured tunnel ranges.
         """
-
         # determine current configured allocatable vnis
         vxlan_vnis = set()
         for tun_min, tun_max in self.tunnel_ranges:
             vxlan_vnis |= set(six.moves.range(tun_min, tun_max + 1))
 
-        # def get_reader_session():
-        #     return lib_db_api.get_reader_session()
-        # 
-        # def get_writer_session():
-        #     return lib_db_api.get_writer_session()
-
-        # session = bc.get_writer_session()
         session = lib_db_api.get_writer_session()
         with session.begin(subtransactions=True):
             # remove from table unallocated tunnels not currently allocatable
@@ -277,12 +182,6 @@ class AsterCXVxlanTypeDriver(type_tunnel.ML2TunnelTypeDriver):
 
         inside = any(lo <= vxlan_vni <= hi for lo, hi in self.tunnel_ranges)
 
-        LOG.info("22222222222222")
-        LOG.info(inside)
-        LOG.info(self.tunnel_ranges)
-        LOG.info("22222222222222")
-
-        # session = bc.get_tunnel_session(context)
         session = context.session
         with session.begin(subtransactions=True):
             query = (session.query(
@@ -292,9 +191,6 @@ class AsterCXVxlanTypeDriver(type_tunnel.ML2TunnelTypeDriver):
                 count = query.update({"allocated": False})
                 if count:
                     pass
-                    # mcast_row = (
-                    #      session.query(aster_models_v2.NexusMcastGroup)
-                    #      .filter_by(associated_vni=vxlan_vni).first())
                     # session.delete(mcast_row)
                     # LOG.debug("Releasing vxlan tunnel %s to pool",
                     #           vxlan_vni)
@@ -303,7 +199,6 @@ class AsterCXVxlanTypeDriver(type_tunnel.ML2TunnelTypeDriver):
                 if count:
                     LOG.debug("Releasing vxlan tunnel %s outside pool",
                               vxlan_vni)
-
         if not count:
             LOG.warning("vxlan_vni %s not found", vxlan_vni)
 
@@ -324,4 +219,3 @@ class AsterCXVxlanTypeDriver(type_tunnel.ML2TunnelTypeDriver):
 
     def get_endpoints(self):
         pass
-

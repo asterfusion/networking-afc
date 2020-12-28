@@ -1,5 +1,5 @@
 import json
-
+import copy
 from sqlalchemy import and_
 from oslo_log import log as logging
 from neutron_lib import constants as n_const
@@ -10,6 +10,7 @@ from neutron_lib.db import api as lib_db_api
 from neutron_lib.plugins.ml2 import api
 from neutron.plugins.ml2.driver_context import NetworkContext  # noqa
 from neutron.db import models_v2
+from neutron.db.models import segment as segment_models
 
 from networking_afc.db.models import aster_models_v2
 
@@ -33,6 +34,14 @@ def get_l3_vni_by_route_id(router_id):
         alloc = session.query(aster_models_v2.AsterL3VNIAllocation). \
             filter_by(router_id=router_id).first()
         return alloc.l3_vni if alloc else -1
+
+
+def get_l2_vni_by_route_id(router_id):
+    session, ctx_manager = get_read_session()
+    with ctx_manager:
+        alloc = session.query(aster_models_v2.AsterL2VNIAllocation). \
+            filter_by(router_id=router_id).first()
+        return alloc.l2_vni if alloc else -1
 
 
 def get_routers_and_interfaces(self):
@@ -76,14 +85,17 @@ def get_routers_and_interfaces(self):
 
 
 def get_router_interface_by_subnet_id(self, subnet_id=None):
-    routers, router_interfaces = get_routers_and_interfaces(self)
+    _, router_interfaces = get_routers_and_interfaces(self)
     for router_interface in router_interfaces:
         if router_interface.get("subnet_id") == subnet_id:
             return router_interface
 
 
 def get_ports_by_subnet(**kwargs):
-    """DVR: RPC called by dvr-agent to get all ports for subnet."""
+    """
+    DVR: RPC called by dvr-agent to get all ports for subnet.
+     Add filter of dhcp port when create
+    """
     subnet_id = kwargs.get('subnet_id')
     host_ids = kwargs.get('host_ids', [])
 
@@ -94,12 +106,17 @@ def get_ports_by_subnet(**kwargs):
         'fixed_ips': {'subnet_id': [subnet_id]}
     }
 
-    LOG.info("Get all ports for subnet, filters params >>>> \n %s \n",
+    LOG.info("Get all ports for subnet, filters params is: \n %s \n",
              json.dumps(filters, indent=3))
 
     ports = core.get_ports(admin_ctx, filters=filters)
     host_port_mappings = {}
-    for port in ports:
+
+    # 'device_owner': 'network:dhcp'
+
+    for port in copy.deepcopy(ports):
+        if port.get("device_owner") == 'network:dhcp':
+            ports.remove(port)
         host_id = port.get("binding:host_id")
         port_id = port.get("id")
         if host_id in host_port_mappings.keys():
@@ -114,7 +131,8 @@ def get_ports_by_subnet(**kwargs):
         _bound_contexts = core.get_bound_ports_contexts(
             admin_ctx, port_ids, host
         )
-        LOG.info("Get host [%s] , _bound_contexts is >>> \n %s \n", host, _bound_contexts)
+        LOG.info("Get host [%s], _bound_contexts is: \n %s \n",
+                 host, _bound_contexts)
         port_bound_contexts.update(_bound_contexts)
 
     for port in ports:
@@ -160,14 +178,13 @@ def get_subnet_detail_by_network_id(network_id=None):
                 subnet_model.ip_version
             ).filter_by(network_id=network_id).first()
         )
-
         if not db_result:
-            LOG.info("Get subnet detail is >>>>>>>>>>>>> %s", db_result)
+            LOG.info("Get subnet detail is: %s", db_result)
             return db_result
-
         result = {
             k: db_result[index]
-            for index, k in enumerate(('subnet_id', 'gip', 'cidr', 'ip_version'))
+            for index, k in enumerate(
+                ('subnet_id', 'gip', 'cidr', 'ip_version'))
         }
         if result:
             cidr = result.get("cidr")
@@ -211,6 +228,23 @@ def _format_gateway_result(db_result):
     result = {
         k: db_result[i]
         for i, k in enumerate(
-            ('device_id', 'network_id', 'subnet_id', 'gip', 'cidr', 'ip_version',
-             'fixed_ip', 'fixed_mac'))}
+            ('device_id', 'network_id', 'subnet_id', 'gip',
+             'cidr', 'ip_version', 'fixed_ip', 'fixed_mac'))}
     return result
+
+
+def get_vlan_id_by_route_id(switch_ip=None, router_id=None):
+    session, ctx_manager = get_read_session()
+    with ctx_manager:
+        alloc = session.query(aster_models_v2.AsterLeafVlanAllocation). \
+            filter_by(switch_ip=switch_ip, router_id=router_id).first()
+        return alloc.vlan_id if alloc else -1
+
+
+def get_network_segments(network_id=None):
+    reader_session = lib_db_api.get_reader_session()
+    with reader_session.begin():
+        model = segment_models.NetworkSegment
+        segments = reader_session.query(model).\
+            filter(model.network_id == network_id).first()
+    return segments

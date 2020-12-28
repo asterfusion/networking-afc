@@ -3,8 +3,10 @@ import six
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_db import exception as db_exc
+from neutron.db.models import l3 as l3_models
 from networking_afc.db.models import aster_models_v2
 from networking_afc.common import utils
+from neutronclient._i18n import _
 
 
 LOG = logging.getLogger(__name__)
@@ -34,9 +36,9 @@ class L3VniManager(object):
                 cfg.CONF.ml2_type_aster_vxlan.l3_vni_ranges,
                 self.l3_vni_ranges
             )
-            # LOG.info("Aster CX Switch L3 VNI ranges: %s", self.conf_vxlan_ranges)
         except Exception:
-            LOG.exception("Failed to parse l3_vni_ranges. Service terminated!")
+            LOG.exception("Failed to parse l3_vni_ranges, "
+                          "Service terminated!")
             raise SystemExit()
 
     @staticmethod
@@ -50,19 +52,15 @@ class L3VniManager(object):
                 tunnel_range = int(l3_vni_min), int(l3_vni_max)
             except ValueError as ex:
                 raise ex
-                # raise exc.NetworkTunnelRangeError(tunnel_range=entry, error=ex)
-            # self._parse_nexus_vni_range(tunnel_range)
             current_range.append(tunnel_range)
 
-        LOG.info("Aster CX Switch L3 VNI ranges: %(range)s",
-                 {'range': current_range})
+        LOG.debug("Aster CX Switch L3 VNI ranges: %(range)s",
+                  {'range': current_range})
 
     def sync_allocations(self):
         """
         Synchronize vxlan_allocations table with configured tunnel ranges.
         """
-
-        # determine current configured allocatable vnis
         l3_vnis = set()
         for l3_vni_min, l3_vni_max in self.l3_vni_ranges:
             l3_vnis |= set(six.moves.range(l3_vni_min, l3_vni_max + 1))
@@ -100,12 +98,30 @@ class L3VniManager(object):
                 session.execute(aster_models_v2.AsterL3VNIAllocation.
                                 __table__.insert(), bulk)
 
+            existing_router_ids = set(
+                alloc.router_id for alloc in allocs if alloc.router_id)
+            routers = (session.query(
+                l3_models.Router).with_lockmode("update").all())
+            router_ids = set(router.id for router in routers if router)
+            not_exist_router_ids = list(existing_router_ids - router_ids)
+            session.flush()
+            for not_exist_router_id in not_exist_router_ids:
+                _alloc = session.query(aster_models_v2.AsterL3VNIAllocation).\
+                    filter_by(router_id=not_exist_router_id).first()
+                if _alloc and _alloc.l3_vni in l3_vnis:
+                    _alloc.router_id = ""
+                else:
+                    session.query(aster_models_v2.AsterL3VNIAllocation).\
+                        filter_by(router_id=not_exist_router_id).delete()
+                session.flush()
+
     def allocation_l3_vni(self, router_id):
         # Allocations one l3 vni to VRouter
         session, ctx_manager = utils.get_writer_session()
         try:
             with ctx_manager:
-                all_l3_vni = session.query(aster_models_v2.AsterL3VNIAllocation).\
+                all_l3_vni = session.\
+                    query(aster_models_v2.AsterL3VNIAllocation).\
                     filter_by(router_id="").all()
                 if not all_l3_vni:
                     # No resource available
@@ -117,9 +133,10 @@ class L3VniManager(object):
                 session.flush()
         except db_exc.DBDuplicateEntry as ex:
             # Segment already allocated (insert failure)
-            raise  ex
+            raise ex
 
     def release_l3_vni(self, router_id):
+        # do not pass unit test
         # Release l3 vni from VRouter
         l3_vnis = set()
         for l3_vni_min, l3_vni_max in self.l3_vni_ranges:
@@ -127,12 +144,11 @@ class L3VniManager(object):
 
         session, ctx_manager = utils.get_writer_session()
         with ctx_manager:
-            alloc = session.query(aster_models_v2.AsterL3VNIAllocation). \
+            alloc = session.query(aster_models_v2.AsterL3VNIAllocation).\
                 filter_by(router_id=router_id).first()
             if alloc and alloc.l3_vni in l3_vnis:
                 alloc.router_id = ""
             else:
-                session.query(aster_models_v2.AsterL3VNIAllocation). \
+                session.query(aster_models_v2.AsterL3VNIAllocation).\
                     filter_by(router_id=router_id).delete()
             session.flush()
-
